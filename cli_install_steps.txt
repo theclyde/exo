@@ -1,0 +1,140 @@
+# (exo-explore v0.0.15-alpha? 2025/02/27)
+# Install exo-explore as a service on CentOS Stream - CPU only
+# Install tested to the point of verrrry slowly responding with llama 3.2.2b on
+# - CPU only VM CentOS 9  (in XCP-ng on x3650 M5) 4 vCPU, 8gb RAM, 125gb HD
+# - CPU only VM CentOS 10 (in XCP-ng on x3650 M5) 4 vCPU, 8gb RAM, 125gb HD
+# - CPU only VM CentOS 9  (in virt on Tiny m90p) 8 vCPU, 15gb RAM, 125gb HD
+# - CPU only BM Centos 9  (Tiny m90p) 1 CPU 4 core 8 threads, 16gb RAM 
+# - CPU only BM Centos 10 (Tiny m90p) 1 CPU 4 core 8 threads, 16gb RAM 
+# - CPU only BM Centos 9  (Potectli FW2B)  1 CPU 2 core 2 threads, 8GB RAM
+# - CPU only BM Centos 9  (Chuwi CoreBox) 4 CPU, 8GB RAM
+
+# Provision Centos 9 or 10 minimal. Log in as user who can sudo 
+
+# Add exo-explore to firewallD
+# TCP 52415 for the web app
+# UDP 5678 for discovery
+# TCP 49152-65535 for background transfers
+sudo firewall-cmd --permanent --new-service=exo-explore
+sudo firewall-cmd --permanent --service=exo-explore --set-description='Run your own AI cluster at home with everyday devices'
+sudo firewall-cmd --permanent --service=exo-explore --set-short='exo-explore'
+sudo firewall-cmd --permanent --service=exo-explore --add-port=52415/tcp
+sudo firewall-cmd --permanent --service=exo-explore --add-port=49152-65535/tcp
+sudo firewall-cmd --permanent --service=exo-explore --add-port=5678/udp
+sudo firewall-cmd --permanent --zone=public --add-service=exo-explore
+sudo firewall-cmd --reload
+
+# Install needed tools
+sudo dnf -y install git tar pip   
+# work around clang not found errors
+sudo dnf -y install clang
+# install Python 3.12 (alrady installed on CentOS 10)
+# (or you can download and build)
+sudo dnf -y install python3.12
+
+# create & become exo service user
+sudo useradd -s /bin/bash exo
+sudo echo exo:exo | sudo chpasswd
+sudo su exo
+
+# get repo
+cd /home/exo/
+git clone https://github.com/exo-explore/exo.git
+cd exo
+
+# work around timeout error on slow single CPU only node. Not seeing issue once I have more than 1 node
+# File "/home/exo/exo/exo/main.py", line 243, in run_model_cli
+#    await callback.wait(on_token, timeout=300)
+sed -i 's/(on_token, timeout=300)/(on_token, timeout=1500)/g' /home/exo/exo/exo/main.py
+
+# work around TriAiExperiments/SFR-Iterative-DPO-LLaMA-3-70B-R/resolve/main/model.safetensors.index.json: 401 error
+sed -i '80s/"Tinygrad/#"Tinygrad/'  /home/exo/exo/exo/models.py 
+
+# Set environment & Install
+cd /home/exo/exo
+python3.12 -m venv /home/exo/exo/.venv
+source /home/exo/exo/.venv/bin/activate
+
+pip install -e .
+
+# FWIW, opencv-python-headless is key for CPU only LLM and Diffusion 
+pip install opencv-python-headless
+pip install llvmlite
+
+# exit the virtual environment
+deactivate
+
+# We are now ready to run interactivly, launch the server, or install the service
+# if --node-id is not passed, exo will use mac.  but I saw fragmentation issues without it
+
+# make startup script to run exo
+cat << EOF > /home/exo/runexo.sh
+#!/bin/bash
+cd /home/exo/
+source /home/exo/exo/.venv/bin/activate
+exo --node-id=$HOSTNAME 
+EOF
+chmod +x /home/exo/runexo.sh
+
+
+# make startup script for SystemD service to run
+# use  --disable-tui to not have the fancy front end
+# use  --node-id=hostname to have the hostname show up in tinychat instead of mac id
+cat << EOF > /home/exo/.exo-service.sh
+#!/bin/bash
+cd /home/exo/
+source /home/exo/exo/.venv/bin/activate
+exo --node-id=$HOSTNAME --disable-tui
+EOF
+chmod +x /home/exo/.exo-service.sh
+
+# we are done being exo
+exit
+
+# stop here if you do not want exo to run as a background service
+# Run exo-explore by becoming the service user and launching the script
+# sudo su exo ~/runexo.sh
+
+sudo su exo
+cat << EOF > /home/exo/.exo-service.sh
+#!/bin/bash
+cd /home/exo/
+source /home/exo/exo/.venv/bin/activate
+exo --node-id=$HOSTNAME --disable-tui
+EOF
+chmod +x /home/exo/.exo-service.sh
+
+exit
+
+# Create service file
+cat << EOF > exo.service
+[Unit]
+Description=exo-explore Service
+After=network.target
+
+[Service]
+User=exo
+WorkingDirectory=/home/exo
+ExecStart=bash /home/exo/.exo-service.sh
+Environment="PATH=/home/exo/exo/.venv/bin:/home/exo/.local/bin:/home/exo/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# move it to services folder, set permissions, add to SELinux
+sudo mv exo.service /usr/lib/systemd/system/exo.service
+sudo chmod 644 /usr/lib/systemd/system/exo.service
+sudo restorecon /usr/lib/systemd/system/exo.service
+ 
+# reload service definitins, enable and start exo, then display status
+sudo systemctl daemon-reload
+sudo systemctl enable exo.service
+sudo systemctl start exo
+sudo systemctl status exo
+# Control+C to quit the status
+
+# You can now log out and exo will keep running, and will start automatically if you reboot
+
