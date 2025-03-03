@@ -1,5 +1,5 @@
 Support for exo-explore (https://github.com/exo-explore/exo), mostly in the context of CentOS 9 and 10  in an x86_64 CPU only environment.
-Mostly cobbled together with the help of some ai and some banging of head against keyboard.
+Playbooks mostly cobbled together with the help of some ai, based on the some banging of head against keyboard getting things to work on the command line.
 
 # Install exo-explore as a service on CentOS Stream - CPU only
 # Install tested to the point of verrrry slowly responding with llama 3.2.2b on
