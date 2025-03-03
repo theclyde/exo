@@ -1,4 +1,16 @@
 Support for exo-explore (https://github.com/exo-explore/exo), mostly in the context of CentOS 9 and 10  in an x86_64 CPU only environment.
 Mostly cobbled together with the help of some ai and some banging of head against keyboard.
 
-install_exo_explore_x86_64_centos.yml - Ansible playbook to install exo-explore on a CPU only CentOS box. Tested from Foreman on CentOS 9 and 10 VMs and various low end mini pc's.
+# Install exo-explore as a service on CentOS Stream - CPU only
+# Install tested to the point of verrrry slowly responding with llama 3.2.2b on
+# - CPU only VM CentOS 9  (in XCP-ng on x3650 M5) 4 vCPU, 8gb RAM, 125gb HD
+# - CPU only VM CentOS 10 (in XCP-ng on x3650 M5) 4 vCPU, 8gb RAM, 125gb HD
+# - CPU only VM CentOS 9  (in virt on Tiny m90p) 8 vCPU, 15gb RAM, 125gb HD
+# - CPU only BM Centos 9  (Tiny m90p) 1 CPU 4 core 8 threads, 16gb RAM 
+# - CPU only BM Centos 10 (Tiny m90p) 1 CPU 4 core 8 threads, 16gb RAM 
+# - CPU only BM Centos 9  (Potectli FW2B)  1 CPU 2 core 2 threads, 8GB RAM
+# - CPU only BM Centos 9  (Chuwi CoreBox) 4 CPU, 8GB RAM
+
+
+cli_install_steps.txt - what i had to type in the terminal to install. SOme of it can be copied and pasted, but I don't think it can be run as a script.
+install_exo_explore_x86_64_centos.yml - Ansible playbook to install exo-explore on a CPU only CentOS box. Based on cli_install_steps.txt
