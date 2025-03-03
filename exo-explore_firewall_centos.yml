@@ -1,0 +1,44 @@
+---
+- name: Configure firewall for exo-explore service
+  hosts: all
+  become: yes
+  tasks:
+
+    - name: Check if firewalld is assumed to be installed 
+      stat:
+        path: /etc/firewalld/zones/public.xml
+      register: public_zone_exists
+
+    - name: Check if exo-explore service file exists
+      stat:
+        path: /etc/firewalld/services/exo-explore.xml
+      register: exo_explore_service_exists
+
+    - name: Create exo-explore service if it doesnt exist
+      command: firewall-cmd --permanent --new-service=exo-explore
+      when: public_zone_exists.stat.exists and not exo_explore_service_exists.stat.exists
+
+    - name: Add exo-explore service to the public zone
+      command: firewall-cmd --permanent --zone=public --add-service=exo-explore
+      when: public_zone_exists.stat.exists and not exo_explore_service_exists.stat.exists
+
+    - name: Ensure the exo-explore service file matches the desired configuration
+      copy:
+        dest: /etc/firewalld/services/exo-explore.xml
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <service>
+            <short>exo-explore</short>
+            <description>Run your own AI cluster at home with everyday devices</description>
+            <port port="52415" protocol="tcp"/>
+            <port port="49152-65535" protocol="tcp"/>
+            <port port="5678" protocol="udp"/>
+          </service>
+        owner: root
+        group: root
+        mode: '0644'
+      when: public_zone_exists.stat.exists
+
+    - name: Reload firewall to apply changes
+      command: firewall-cmd --reload
+      when: public_zone_exists.stat.exists
