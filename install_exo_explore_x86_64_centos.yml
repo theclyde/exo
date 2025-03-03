@@ -1,0 +1,122 @@
+---
+- name: Install and configure exo-explore as a service
+  hosts: all
+  become: yes
+  tasks:
+
+    # Stop exo.service if it exists
+    - name: Stop exo.service if it exists
+      ansible.builtin.systemd:
+        name: exo.service
+        state: stopped
+      ignore_errors: yes
+
+    # Install required packages
+    - name: Install required packages
+      dnf:
+        name:
+          - git
+          - tar
+          - pip
+          - clang
+          - python3.12
+        state: present
+        
+    - name: Ensure exo group exists
+      group:
+        name: exo
+        state: present
+        
+    # Create exo user if not already created
+    - name: Create exo service user
+      user:
+        name: exo
+        group: exo
+        shell: /bin/bash
+        password: "{{ 'exo' | password_hash('sha512') }}"
+        home: /home/exo
+        state: present
+
+    # Ensure the repository directory is safe for git operations
+    - name: Ensure the repository is cloned and up-to-date
+      become_user: exo
+      git:
+        repo: 'https://github.com/exo-explore/exo.git'
+        dest: /home/exo/exo
+        force: yes  # This will overwrite local changes with the remote repository
+        update: yes  # Pull updates if the repository already exists
+
+    - name: Create Python virtual environment
+      become_user: exo
+      command: python3.12 -m venv /home/exo/exo/.venv
+      args:
+        creates: /home/exo/exo/.venv
+
+    - name: Activate the virtual environment and install in editable mode
+      become_user: exo
+      shell: |
+        source /home/exo/exo/.venv/bin/activate
+        pip install -e /home/exo/exo
+        pip install opencv-python-headless
+        pip install llvmlite
+      args:
+        executable: /bin/bash
+
+    # Create the runexo.sh startup script only if it doesn't exist
+    - name: Create the runexo.sh script
+      become_user: exo
+      copy:
+        dest: /home/exo/runexo.sh
+        content: |
+          #!/bin/bash
+          cd /home/exo/exo
+          source /home/exo/exo/.venv/bin/activate
+          exec exo --node-id={{ ansible_hostname }}
+        mode: '0755'
+        force: yes  # Only update if necessary
+
+    # Create the systemd service startup script only if it doesn't exist
+    - name: Create the .exo-service.sh script
+      become_user: exo
+      copy:
+        dest: /home/exo/.exo-service.sh
+        content: |
+          #!/bin/bash
+          cd /home/exo/exo
+          source /home/exo/exo/.venv/bin/activate
+          exec exo --node-id={{ ansible_hostname }} --disable-tui
+        mode: '0755'
+        force: yes  # Only update if necessary
+
+    # Create the systemd service file only if it doesn't exist or is different
+    - name: Create exo service file
+      copy:
+        dest: /usr/lib/systemd/system/exo.service
+        content: |
+          [Unit]
+          Description=exo-explore Service
+          After=network.target
+
+          [Service]
+          User=exo
+          WorkingDirectory=/home/exo/exo
+          ExecStart=/bin/bash /home/exo/.exo-service.sh
+          Environment="PATH=/home/exo/exo/.venv/bin:/home/exo/.local/bin:/home/exo/bin:/sbin:/bin:/usr/sbin:/usr/bin"
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+        force: yes  # Only update if necessary
+
+    # Reload systemd and start the service
+    - name: Reload systemd to apply changes
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable exo service
+      systemd:
+        name: exo.service
+        enabled: yes
+        state: started
