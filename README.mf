@@ -1,0 +1,1 @@
+Support for exo-explore (https://github.com/exo-explore/exo), mostly in the context of CentOS 9 and 10  in an x86_64 CPU only environment.
