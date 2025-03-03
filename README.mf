@@ -14,3 +14,4 @@ Mostly cobbled together with the help of some ai and some banging of head agains
 
 cli_install_steps.txt - what i had to type in the terminal to install. SOme of it can be copied and pasted, but I don't think it can be run as a script.
 install_exo_explore_x86_64_centos.yml - Ansible playbook to install exo-explore on a CPU only CentOS box. Based on cli_install_steps.txt
+exo-explore_firewall_centos.yml - Ansible playbook to open ports needed for exo-explore
